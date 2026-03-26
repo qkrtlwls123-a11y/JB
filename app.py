@@ -1,5 +1,6 @@
 import io
 import re
+import time
 
 import pandas as pd
 import streamlit as st
@@ -17,9 +18,12 @@ QUESTION_COUNT = 9
 HIGHLIGHT_COLOR_HEX = "FFF59D"  # 연노랑 형광펜 색
 SCORE_DISPLAY_ORDER = [4, 3, 2, 1]  # PPT 옵션 문단이 위에서부터 4,3,2,1 순서
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=15)
 def load_data(url):
-    return pd.read_csv(url)
+    # 구글 시트 웹 게시의 자체 캐시(약 5분 지연)를 우회하기 위해 URL에 타임스탬프 추가
+    separator = "&" if "?" in url else "?"
+    no_cache_url = f"{url}{separator}t={int(time.time())}"
+    return pd.read_csv(no_cache_url)
 
 def update_chart_data(chart, new_values):
     """기존 차트의 X축(Category)을 유지하면서 데이터(Value)만 교체합니다."""
@@ -134,8 +138,6 @@ def set_run_highlight(run, color_hex=HIGHLIGHT_COLOR_HEX):
     color.set("val", color_hex.upper())
     highlight.append(color)
 
-    # PowerPoint는 <a:highlight> 위치(order)에 민감합니다.
-    # 특히 uLnTx/uFillTx 앞에 들어가야 1~7번 텍스트 스타일에서도 하이라이트가 정상 렌더링됩니다.
     insert_before = {
         qn("a:uLnTx"),
         qn("a:uFillTx"),
@@ -226,6 +228,7 @@ def main():
     
     if selected_date:
         filtered_df = df[df[date_column] == selected_date]
+        response_count = len(filtered_df) # 해당 일자 응답 인원 산출
 
         question_columns = get_question_columns(df)
         missing_questions = [q for q in range(1, QUESTION_COUNT + 1) if q not in question_columns]
@@ -251,7 +254,8 @@ def main():
             top_scores_by_question[idx] = top_scores
             top_frequency_by_question[idx] = max_freq
 
-        st.write(f"**{selected_date}** 평균 데이터 미리보기:")
+        # 응답 인원 표시 적용
+        st.write(f"**{selected_date}** 평균 데이터 미리보기 (응답 인원: **{response_count}명**):")
         st.dataframe(pd.DataFrame([averages], columns=[f"Q{i}" for i in range(1, QUESTION_COUNT + 1)]))
 
         mode_rows = []
